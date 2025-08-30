@@ -1,0 +1,1232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>GPU Orb — Advanced Benchmark Suite</title>
+<style>
+  html,body{height:100%;margin:0;background:#000;overflow:hidden}
+  canvas{display:block;width:100vw;height:100vh}
+  #fps{
+    position:fixed; right:12px; top:12px; z-index:30;
+    background:linear-gradient(135deg, rgba(0,0,0,0.8), rgba(20,40,80,0.6));
+    backdrop-filter:blur(8px); padding:12px 16px; border-radius:12px;
+    font:bold 14px/1 ui-monospace,monospace; 
+    border:1px solid rgba(80,180,255,0.3);
+    box-shadow: 0 4px 20px rgba(0,100,255,0.1);
+    transition: all 0.3s ease;
+  }
+  #toggle-btn{
+    position:fixed; left:12px; top:12px; z-index:30;
+    background:linear-gradient(135deg, rgba(0,0,0,0.9), rgba(30,60,120,0.7));
+    backdrop-filter:blur(10px); color:#bfe9ff; padding:12px; border-radius:12px;
+    font:bold 18px/1 ui-monospace,monospace; 
+    border:1px solid rgba(80,180,255,0.4);
+    box-shadow: 0 4px 20px rgba(0,100,255,0.15);
+    cursor:pointer; user-select:none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #toggle-btn:hover{
+    transform:translateY(-2px) scale(1.05);
+    box-shadow: 0 8px 30px rgba(0,150,255,0.3);
+    border-color:rgba(120,200,255,0.6);
+  }
+  #hud{
+    position:fixed; left:50%; bottom:0; z-index:30; transform: translateX(-50%);
+    background:linear-gradient(180deg, rgba(5,20,40,0.95), rgba(0,10,25,0.98));
+    backdrop-filter:blur(15px); color:#bfe9ff; padding:16px; 
+    border-radius:16px 16px 0 0;
+    font:12px/1.3 ui-monospace,monospace; 
+    border:1px solid rgba(80,180,255,0.3);
+    border-bottom:none; width:95vw; max-width:600px; text-align:center;
+    box-shadow: 0 -8px 40px rgba(0,100,255,0.2);
+    transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.5s ease;
+    transform: translateX(-50%) translateY(100%);
+    opacity: 0;
+    max-height:80vh; overflow-y:auto;
+  }
+  #hud.visible{
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  #hud .title{
+    font-weight:700; margin-bottom:12px; font-size:14px;
+    background:linear-gradient(135deg, #bfe9ff, #00aaff);
+    background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    text-shadow: 0 0 20px rgba(0,170,255,0.5);
+  }
+  .quality-grid{
+    display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; margin:12px 0;
+  }
+  @media (min-width: 480px) {
+    .quality-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  button{
+    padding:10px 6px; border-radius:10px; 
+    border:1px solid rgba(120,200,255,0.2);
+    background:linear-gradient(135deg, rgba(5,20,35,0.8), rgba(10,30,60,0.6));
+    color:#bfe9ff; cursor:pointer; font-weight:500; font-size:11px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position:relative; overflow:hidden;
+    backdrop-filter:blur(5px);
+  }
+  button:hover{
+    transform:translateY(-2px);
+    background:linear-gradient(135deg, rgba(10,40,70,0.9), rgba(20,50,90,0.7));
+    border-color:rgba(120,200,255,0.4);
+    box-shadow: 0 6px 25px rgba(0,100,255,0.2);
+  }
+  button.active{
+    background:linear-gradient(135deg, rgba(0,100,255,0.3), rgba(0,150,255,0.2));
+    border-color:rgba(120,200,255,0.8);
+    box-shadow: 0 4px 20px rgba(0,120,255,0.4);
+    color:#ffffff;
+  }
+  .death-button {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, rgba(150, 0, 0, 0.5), rgba(200, 0, 0, 0.4));
+  }
+  .death-button:hover {
+    background: linear-gradient(135deg, rgba(180, 20, 20, 0.7), rgba(220, 20, 20, 0.6));
+    border-color: rgba(255, 80, 80, 0.6);
+  }
+  .death-button.active {
+    background: linear-gradient(135deg, rgba(200, 0, 0, 0.6), rgba(255, 30, 30, 0.5));
+    border-color: rgba(255, 100, 100, 0.9);
+  }
+  .benchmark-section {
+    margin: 20px 0;
+    padding: 15px;
+    border-radius: 12px;
+    background: rgba(0, 25, 50, 0.4);
+    border: 1px solid rgba(80, 180, 255, 0.2);
+  }
+  .benchmark-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 15px;
+  }
+  .benchmark-preset {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin: 5px 0;
+    background: rgba(0, 30, 60, 0.5);
+    border-radius: 8px;
+    border: 1px solid rgba(80, 180, 255, 0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .benchmark-preset:hover {
+    background: rgba(0, 50, 100, 0.6);
+    border-color: rgba(80, 180, 255, 0.3);
+  }
+  .benchmark-preset.active {
+    background: rgba(0, 100, 200, 0.4);
+    border-color: rgba(80, 180, 255, 0.6);
+  }
+  .custom-settings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 10px 0;
+  }
+  .setting-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .setting-group label {
+    font-size: 10px;
+    color: #9ad;
+  }
+  .setting-group input, .setting-group select {
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(80, 180, 255, 0.2);
+    background: rgba(0, 20, 40, 0.8);
+    color: #bfe9ff;
+    font-size: 11px;
+  }
+  .progress-container {
+    margin: 15px 0;
+    display: none;
+  }
+  .progress-bar {
+    width: 100%;
+    height: 20px;
+    background: rgba(0, 20, 40, 0.8);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(80, 180, 255, 0.3);
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00aaff, #0066ff);
+    width: 0%;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  .live-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 15px 0;
+  }
+  .stat-box {
+    padding: 8px;
+    background: rgba(0, 30, 60, 0.5);
+    border-radius: 8px;
+    border: 1px solid rgba(80, 180, 255, 0.2);
+    text-align: center;
+  }
+  .stat-label {
+    font-size: 10px;
+    color: #9ad;
+    margin-bottom: 3px;
+  }
+  .stat-value {
+    font-size: 12px;
+    font-weight: bold;
+    color: #bfe9ff;
+  }
+  .results-container {
+    display: none;
+    margin-top: 15px;
+  }
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .results-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .results-actions button {
+    padding: 5px 10px;
+    font-size: 10px;
+  }
+  .results-table {
+    overflow-x: auto;
+  }
+  .results-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    gap: 8px;
+    padding: 6px 8px;
+    margin: 3px 0;
+    border-radius: 6px;
+    background: rgba(0, 20, 40, 0.4);
+    border: 1px solid rgba(80, 180, 255, 0.1);
+    font-size: 10px;
+  }
+  .results-row.header {
+    background: rgba(0, 40, 80, 0.6);
+    font-weight: bold;
+    color: #00aaff;
+  }
+  .performance-chart {
+    width: 100%;
+    height: 120px;
+    background: rgba(0, 20, 40, 0.6);
+    border-radius: 8px;
+    border: 1px solid rgba(80, 180, 255, 0.2);
+    margin: 10px 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .chart-canvas {
+    width: 100%;
+    height: 100%;
+  }
+  .info-row{
+    display:flex; justify-content:space-between; align-items:center;
+    margin:6px 0; padding:6px 10px; border-radius:6px;
+    background:rgba(0,30,60,0.3); border:1px solid rgba(80,180,255,0.1);
+  }
+  .info-label{color:#9ad; font-size:11px}
+  .info-value{color:#bfe9ff; font-weight:600; font-size:11px}
+  .close-hud {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: transparent;
+    border: none;
+    color: #bfe9ff;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .close-hud:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  #warning {
+    margin-top: 12px; padding: 12px; border-radius: 10px;
+    background: linear-gradient(135deg, rgba(150, 0, 0, 0.4), rgba(200, 50, 50, 0.3));
+    border: 1px solid rgba(255, 60, 60, 0.6);
+    color: #ff8888; font-weight: bold; display: none;
+    box-shadow: 0 4px 15px rgba(255, 0, 0, 0.2);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 4px 15px rgba(255, 0, 0, 0.2); }
+    50% { box-shadow: 0 4px 25px rgba(255, 0, 0, 0.4); }
+  }
+  .controls-hint{
+    font-size:10px; color:#7ac; margin-top:10px; opacity:0.8;
+    padding:6px; background:rgba(0,20,40,0.4); border-radius:5px;
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="toggle-btn" onclick="toggleHUD()">⚙️</div>
+<div id="fps">-- fps</div>
+<div id="hud">
+  <button class="close-hud" onclick="toggleHUD()">×</button>
+  <div class="title">⚡ GPU Orb — Advanced Benchmark Suite ⚡</div>
+  
+  <!-- Manual Controls -->
+  <div class="quality-grid">
+    <button id="bSL">🟢 Super Low</button>
+    <button id="bL">🟡 Low</button>
+    <button id="bH">🟠 High</button>
+    <button id="bSH">🔴 Super High</button>
+    <button id="bS">☠️ Extreme</button>
+    <button id="bSF">☠️🔥 MAXIMUM</button>
+    <button id="bDeath" class="death-button">☠️💀 INSTA-DEATH</button>
+    <button id="bDeath2" class="death-button">☠️💀🔥 DOUBLE-DEATH</button>
+    <button id="bDeath3" class="death-button">☠️💀☠️ QUAD-DEATH</button>
+  </div>
+
+  <div class="info-row">
+    <span class="info-label">Current Mode:</span>
+    <span class="info-value" id="mode">Super Low</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">GPU Load:</span>
+    <span class="info-value" id="comp">--</span>
+  </div>
+
+  <!-- Advanced Benchmark Section -->
+  <div class="benchmark-section">
+    <h3 style="margin: 0 0 15px 0; color: #00aaff; font-size: 13px; text-align: center;">🔬 Advanced Benchmark Suite</h3>
+    
+    <!-- Benchmark Presets -->
+    <div class="benchmark-controls">
+      <button id="quick-bench">⚡ Quick Test (30s)</button>
+      <button id="standard-bench">📊 Standard (2min)</button>
+      <button id="extended-bench">🏆 Extended (5min)</button>
+      <button id="custom-bench">🛠️ Custom Benchmark</button>
+    </div>
+
+    <!-- Custom Benchmark Settings -->
+    <div id="custom-settings" style="display: none;">
+      <div class="custom-settings">
+        <div class="setting-group">
+          <label>Test Duration (seconds)</label>
+          <input type="number" id="test-duration" value="10" min="5" max="300">
+        </div>
+        <div class="setting-group">
+          <label>Warmup Time (seconds)</label>
+          <input type="number" id="warmup-time" value="3" min="0" max="30">
+        </div>
+        <div class="setting-group">
+          <label>Sample Rate (fps)</label>
+          <select id="sample-rate">
+            <option value="1">Every Frame</option>
+            <option value="10" selected>10 FPS</option>
+            <option value="5">5 FPS</option>
+            <option value="1">1 FPS</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label>Stability Test</label>
+          <select id="stability-test">
+            <option value="false">Disabled</option>
+            <option value="true" selected>Enabled</option>
+          </select>
+        </div>
+      </div>
+      <div class="custom-settings">
+        <div class="setting-group">
+          <label>Include Modes</label>
+          <select id="include-modes" multiple size="4">
+            <option value="superlow" selected>Super Low</option>
+            <option value="low" selected>Low</option>
+            <option value="high" selected>High</option>
+            <option value="superhigh" selected>Super High</option>
+            <option value="skull">Extreme</option>
+            <option value="skullfire">Maximum</option>
+            <option value="death">Insta-Death</option>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label>Chart Type</label>
+          <select id="chart-type">
+            <option value="line" selected>Line Chart</option>
+            <option value="bar">Bar Chart</option>
+            <option value="both">Both</option>
+          </select>
+        </div>
+      </div>
+      <button id="start-custom-bench" style="grid-column: 1 / -1; margin-top: 10px;">🚀 Start Custom Benchmark</button>
+    </div>
+
+    <!-- Live Stats -->
+    <div class="live-stats" id="live-stats" style="display: none;">
+      <div class="stat-box">
+        <div class="stat-label">Current FPS</div>
+        <div class="stat-value" id="current-fps">--</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Min / Max</div>
+        <div class="stat-value" id="fps-range">-- / --</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Stability</div>
+        <div class="stat-value" id="stability">--%</div>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="progress-container" id="progress-container">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill">0%</div>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 10px; color: #9ad;">
+        <span id="current-test">Initializing...</span>
+        <span id="time-remaining">--</span>
+      </div>
+    </div>
+
+    <!-- Performance Chart -->
+    <div class="performance-chart" id="performance-chart" style="display: none;">
+      <canvas class="chart-canvas" id="chart-canvas"></canvas>
+    </div>
+
+    <!-- Results -->
+    <div class="results-container" id="results-container">
+      <div class="results-header">
+        <h4 style="margin: 0; color: #bfe9ff; font-size: 12px;">📈 Benchmark Results</h4>
+        <div class="results-actions">
+          <button id="export-json">📄 Export JSON</button>
+          <button id="export-csv">📊 Export CSV</button>
+          <button id="share-results">🔗 Share</button>
+        </div>
+      </div>
+      <div class="results-table" id="results-table">
+        <!-- Results will be populated here -->
+      </div>
+    </div>
+  </div>
+
+  <div id="warning"></div>
+  
+  <div class="controls-hint">
+    🎮 Drag to orbit • 🔍 Pinch/scroll to zoom • ⚙️ Tap gear to toggle • Click outside to close HUD
+  </div>
+</div>
+
+<!-- Shaders remain the same -->
+<script id="vs" type="x-shader/x-vertex">
+attribute vec2 aPos;
+varying vec2 vUv;
+void main(){
+  vUv = aPos*0.5 + 0.5;
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+precision highp float;
+varying vec2 vUv;
+uniform vec2 uRes;
+uniform float uTime;
+uniform vec2 uMouse;
+uniform float uZoom;
+uniform int uComplex;
+
+const int MAX_LOOP = 32768;
+
+float hash21(vec2 p){ p = fract(p*vec2(127.1,311.7)); p += dot(p,p+78.233); return fract(p.x*p.y); }
+float noise3(vec3 p){
+  return hash21(p.xy + p.z);
+}
+
+bool intersectSphere(vec3 ro, vec3 rd, float r, out float t0, out float t1){
+  float b = dot(ro, rd);
+  float c = dot(ro,ro) - r*r;
+  float h = b*b - c;
+  if(h < 0.0) return false;
+  h = sqrt(h);
+  t0 = -b - h;
+  t1 = -b + h;
+  return true;
+}
+
+void main(){
+  vec2 uv = (vUv*2.0 - 1.0);
+  uv.x *= uRes.x / uRes.y;
+
+  float yaw = uMouse.x;
+  float pitch = uMouse.y;
+  float camDist = mix(2.8, 4.2, uZoom);
+  vec3 ro = vec3(0.0, 0.0, camDist);
+  mat2 ry = mat2(cos(yaw), -sin(yaw), sin(yaw), cos(yaw));
+  mat2 rx = mat2(cos(pitch), -sin(pitch), sin(pitch), cos(pitch));
+  ro.xz = ry * ro.xz;
+  ro.yz = rx * ro.yz;
+
+  vec3 rd = normalize(vec3(uv, -1.6));
+  rd.xz = ry * rd.xz;
+  rd.yz = rx * rd.yz;
+
+  float t0, t1;
+  vec3 color = vec3(0.0);
+
+  if(intersectSphere(ro, rd, 0.85, t0, t1)){
+    float t = max(t0, 0.0);
+    vec3 p = ro + rd * t;
+
+    vec3 base = vec3(0.04, 0.36, 1.0);
+
+    float acc = 0.0;
+    for(int i=0; i<MAX_LOOP; i++){
+      if(i >= uComplex) break;
+      float fi = float(i) * 0.61803398875;
+      vec3 q = p * (1.0 + 0.07*sin(uTime*0.15 + fi*0.13));
+      q += vec3(sin(fi*0.31 + uTime*0.21), cos(fi*0.17 - uTime*0.19), sin(fi*0.23 + uTime*0.11)) * 0.14;
+
+      float d1 = dot(q, vec3(12.9898,78.233,45.164));
+      float s = sin(d1 * 0.00012 + fi*0.37);
+      float c = cos(d1 * 0.00009 - fi*0.21);
+      float n = noise3(q*1.3 + vec3(fi*0.21));
+      acc += (s * c * (0.5 + 0.5*n)) * pow(abs(s*c), 0.8) * exp(-0.0001*abs(d1));
+      acc = fract(acc * 1.0000003 + 0.0000007*fi);
+    }
+
+    vec3 N = normalize(p);
+    float diff = clamp(dot(N, normalize(vec3(0.6,0.8,-0.5))), 0.0, 1.0);
+    float rim = pow(1.0 - max(dot(N, -rd), 0.0), 2.6);
+
+    float detail = acc * 2.5;
+    color = base * (0.25 + 1.1*diff) + vec3(0.15,0.45,0.9) * detail + vec3(0.6,0.95,1.2) * rim * 0.9;
+    float core = smoothstep(0.95, 0.2, length(p));
+    color += vec3(0.25,0.45,0.85) * pow(core, 1.6) * 0.9;
+
+    color = color / (1.0 + color);
+    color = pow(color, vec3(0.95));
+  } else {
+    float t = 0.5 + 0.5 * uv.y;
+    color = mix(vec3(0.008,0.01,0.015), vec3(0.005,0.007,0.01), t);
+    color += vec3(0.012,0.018,0.03) * noise3(vec3(uv*1.6, uTime*0.02)) * 0.35;
+  }
+
+  gl_FragColor = vec4(color, 1.0);
+}
+</script>
+
+<script>
+(function(){
+  const canvas = document.getElementById('gl');
+  const gl = canvas.getContext('webgl', {antialias:false, powerPreference:'high-performance'});
+  if(!gl){ alert('WebGL not supported'); return; }
+
+  // Shader compilation
+  function compile(type, src){
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)){
+      console.error(gl.getShaderInfoLog(sh));
+      throw new Error('Shader compile failed');
+    }
+    return sh;
+  }
+  
+  const vs = compile(gl.VERTEX_SHADER, document.getElementById('vs').textContent);
+  const fs = compile(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent);
+  
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){
+    console.error(gl.getProgramInfoLog(prog)); return;
+  }
+  gl.useProgram(prog);
+
+  // Quad setup
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -1,-1,  1,-1,  -1,1,
+     1,-1,   1,1,  -1,1
+  ]), gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  // Uniforms
+  const uRes = gl.getUniformLocation(prog, 'uRes');
+  const uTime = gl.getUniformLocation(prog, 'uTime');
+  const uMouse = gl.getUniformLocation(prog, 'uMouse');
+  const uZoom = gl.getUniformLocation(prog, 'uZoom');
+  const uComplex = gl.getUniformLocation(prog, 'uComplex');
+
+  // Elements
+  const hudEl = document.getElementById('hud');
+  const fpsEl = document.getElementById('fps');
+  const modeEl = document.getElementById('mode');
+  const compEl = document.getElementById('comp');
+  const warningEl = document.getElementById('warning');
+
+  // Benchmark elements
+  const liveStats = document.getElementById('live-stats');
+  const progressContainer = document.getElementById('progress-container');
+  const progressFill = document.getElementById('progress-fill');
+  const currentTest = document.getElementById('current-test');
+  const timeRemaining = document.getElementById('time-remaining');
+  const performanceChart = document.getElementById('performance-chart');
+  const chartCanvas = document.getElementById('chart-canvas');
+  const resultsContainer = document.getElementById('results-container');
+  const resultsTable = document.getElementById('results-table');
+  const customSettings = document.getElementById('custom-settings');
+
+  // Complexity settings
+  const COMPLEX = {
+    'superlow': 2, 'low': 28, 'high': 240, 'superhigh': 1024,
+    'skull': 2048, 'skullfire': 4096, 'death': 8192,
+    'death2': 16384, 'death3': 32768
+  };
+
+  // Advanced Benchmark System
+  class AdvancedBenchmark {
+    constructor() {
+      this.isRunning = false;
+      this.currentConfig = null;
+      this.results = [];
+      this.currentModeIndex = 0;
+      this.currentModeData = {
+        fps: [],
+        frameTime: [],
+        timestamps: [],
+        minFps: Infinity,
+        maxFps: 0,
+        totalFrames: 0
+      };
+      this.chart = null;
+      this.sampleCounter = 0;
+      this.warmupStartTime = 0;
+      this.testStartTime = 0;
+      this.isWarmup = false;
+    }
+
+    async runBenchmark(config) {
+      if (this.isRunning) return;
+      
+      this.isRunning = true;
+      this.currentConfig = config;
+      this.results = [];
+      this.currentModeIndex = 0;
+      
+      // Show UI elements
+      liveStats.style.display = 'grid';
+      progressContainer.style.display = 'block';
+      performanceChart.style.display = 'block';
+      resultsContainer.style.display = 'none';
+      
+      // Show HUD if not visible
+      if (!hudVisible) toggleHUD();
+      
+      // Initialize chart
+      this.initChart();
+      
+      // Start benchmark
+      await this.runNextMode();
+      
+      // Finish
+      this.finishBenchmark();
+    }
+
+    async runNextMode() {
+      if (this.currentModeIndex >= this.currentConfig.modes.length) return;
+      
+      const mode = this.currentConfig.modes[this.currentModeIndex];
+      const modeName = this.getModeDisplayName(mode);
+      
+      // Reset mode data
+      this.currentModeData = {
+        fps: [],
+        frameTime: [],
+        timestamps: [],
+        minFps: Infinity,
+        maxFps: 0,
+        totalFrames: 0,
+        startTime: 0,
+        mode: mode
+      };
+      
+      // Set mode
+      setMode(mode);
+      
+      // Update UI
+      currentTest.textContent = `Testing: ${modeName}`;
+      
+      // Warmup phase
+      if (this.currentConfig.warmupTime > 0) {
+        this.isWarmup = true;
+        this.warmupStartTime = performance.now();
+        await this.waitFor(this.currentConfig.warmupTime * 1000);
+      }
+      
+      // Test phase
+      this.isWarmup = false;
+      this.testStartTime = performance.now();
+      this.currentModeData.startTime = this.testStartTime;
+      await this.waitFor(this.currentConfig.testDuration * 1000);
+      
+      // Process results for this mode
+      this.processCurrentModeResults();
+      
+      // Move to next mode
+      this.currentModeIndex++;
+      await this.runNextMode();
+    }
+
+    waitFor(ms) {
+      return new Promise(resolve => {
+        const startTime = performance.now();
+        const checkTime = () => {
+          const elapsed = performance.now() - startTime;
+          const progress = Math.min(elapsed / ms, 1);
+          
+          // Update progress
+          const totalProgress = ((this.currentModeIndex + progress) / this.currentConfig.modes.length) * 100;
+          progressFill.style.width = totalProgress + '%';
+          progressFill.textContent = Math.round(totalProgress) + '%';
+          
+          // Update time remaining
+          const remainingMs = ms - elapsed;
+          const totalRemainingMs = remainingMs + (this.currentConfig.modes.length - this.currentModeIndex - 1) * 
+                                   (this.currentConfig.testDuration + this.currentConfig.warmupTime) * 1000;
+          timeRemaining.textContent = this.formatTime(totalRemainingMs / 1000);
+          
+          if (elapsed >= ms) {
+            resolve();
+          } else {
+            requestAnimationFrame(checkTime);
+          }
+        };
+        checkTime();
+      });
+    }
+
+    collectFrameData(fps, frameTime) {
+      if (!this.isRunning || this.isWarmup) return;
+      
+      this.sampleCounter++;
+      
+      // Sample based on config
+      if (this.sampleCounter % Math.max(1, Math.round(60 / this.currentConfig.sampleRate)) !== 0) {
+        return;
+      }
+      
+      const now = performance.now();
+      const elapsed = (now - this.currentModeData.startTime) / 1000;
+      
+      this.currentModeData.fps.push(fps);
+      this.currentModeData.frameTime.push(frameTime);
+      this.currentModeData.timestamps.push(elapsed);
+      this.currentModeData.minFps = Math.min(this.currentModeData.minFps, fps);
+      this.currentModeData.maxFps = Math.max(this.currentModeData.maxFps, fps);
+      this.currentModeData.totalFrames++;
+      
+      // Update live stats
+      this.updateLiveStats(fps);
+      
+      // Update chart
+      this.updateChart();
+    }
+
+    updateLiveStats(currentFps) {
+      document.getElementById('current-fps').textContent = Math.round(currentFps);
+      document.getElementById('fps-range').textContent = 
+        `${Math.round(this.currentModeData.minFps)} / ${Math.round(this.currentModeData.maxFps)}`;
+      
+      // Calculate stability (coefficient of variation)
+      if (this.currentModeData.fps.length > 5) {
+        const mean = this.currentModeData.fps.reduce((a, b) => a + b, 0) / this.currentModeData.fps.length;
+        const variance = this.currentModeData.fps.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / this.currentModeData.fps.length;
+        const cv = Math.sqrt(variance) / mean;
+        const stability = Math.max(0, 100 - (cv * 100));
+        document.getElementById('stability').textContent = Math.round(stability) + '%';
+      }
+    }
+
+    processCurrentModeResults() {
+      if (this.currentModeData.fps.length === 0) return;
+      
+      const fps = this.currentModeData.fps;
+      const avgFps = fps.reduce((a, b) => a + b, 0) / fps.length;
+      const p1 = this.percentile(fps, 0.01);
+      const p99 = this.percentile(fps, 0.99);
+      const frameTime = this.currentModeData.frameTime;
+      const avgFrameTime = frameTime.reduce((a, b) => a + b, 0) / frameTime.length;
+      
+      // Calculate stability metrics
+      const variance = fps.reduce((a, b) => a + Math.pow(b - avgFps, 2), 0) / fps.length;
+      const stdDev = Math.sqrt(variance);
+      const stability = Math.max(0, 100 - ((stdDev / avgFps) * 100));
+      
+      this.results.push({
+        mode: this.currentModeData.mode,
+        avgFps: Math.round(avgFps * 100) / 100,
+        minFps: Math.round(this.currentModeData.minFps * 100) / 100,
+        maxFps: Math.round(this.currentModeData.maxFps * 100) / 100,
+        p1Fps: Math.round(p1 * 100) / 100,
+        p99Fps: Math.round(p99 * 100) / 100,
+        avgFrameTime: Math.round(avgFrameTime * 1000) / 1000,
+        stability: Math.round(stability * 10) / 10,
+        totalFrames: this.currentModeData.totalFrames,
+        samples: fps.length,
+        rawData: {
+          fps: [...fps],
+          frameTime: [...frameTime],
+          timestamps: [...this.currentModeData.timestamps]
+        }
+      });
+    }
+
+    percentile(arr, p) {
+      const sorted = [...arr].sort((a, b) => a - b);
+      const index = (p * (sorted.length - 1));
+      const lower = Math.floor(index);
+      const upper = Math.ceil(index);
+      return sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
+    }
+
+    finishBenchmark() {
+      this.isRunning = false;
+      
+      // Hide live elements
+      liveStats.style.display = 'none';
+      progressContainer.style.display = 'none';
+      
+      // Show results
+      this.displayResults();
+      resultsContainer.style.display = 'block';
+    }
+
+    displayResults() {
+      const modeNames = {
+        'superlow': '🟢 Super Low', 'low': '🟡 Low', 'high': '🟠 High',
+        'superhigh': '🔴 Super High', 'skull': '☠️ Extreme',
+        'skullfire': '☠️🔥 MAXIMUM', 'death': '☠️💀 INSTA-DEATH',
+        'death2': '☠️💀🔥 DOUBLE-DEATH', 'death3': '☠️💀☠️ QUAD-DEATH'
+      };
+      
+      let html = `
+        <div class="results-row header">
+          <div>Mode</div>
+          <div>Avg FPS</div>
+          <div>Min FPS</div>
+          <div>P1%</div>
+          <div>Stability</div>
+        </div>
+      `;
+      
+      this.results.forEach(result => {
+        html += `
+          <div class="results-row">
+            <div>${modeNames[result.mode]}</div>
+            <div>${result.avgFps}</div>
+            <div>${result.minFps}</div>
+            <div>${result.p1Fps}</div>
+            <div>${result.stability}%</div>
+          </div>
+        `;
+      });
+      
+      resultsTable.innerHTML = html;
+    }
+
+    initChart() {
+      const ctx = chartCanvas.getContext('2d');
+      chartCanvas.width = chartCanvas.offsetWidth * (window.devicePixelRatio || 1);
+      chartCanvas.height = chartCanvas.offsetHeight * (window.devicePixelRatio || 1);
+      ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+      
+      // Clear canvas
+      ctx.fillStyle = 'rgba(0, 20, 40, 0.8)';
+      ctx.fillRect(0, 0, chartCanvas.offsetWidth, chartCanvas.offsetHeight);
+    }
+
+    updateChart() {
+      if (!this.currentModeData.fps.length) return;
+      
+      const ctx = chartCanvas.getContext('2d');
+      const width = chartCanvas.offsetWidth;
+      const height = chartCanvas.offsetHeight;
+      
+      // Clear
+      ctx.fillStyle = 'rgba(0, 20, 40, 0.8)';
+      ctx.fillRect(0, 0, width, height);
+      
+      // Draw FPS line
+      const fps = this.currentModeData.fps;
+      const maxFps = Math.max(...fps, 60);
+      const minFps = Math.min(...fps, 0);
+      const range = maxFps - minFps || 1;
+      
+      ctx.strokeStyle = '#00aaff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      
+      fps.forEach((f, i) => {
+        const x = (i / (fps.length - 1)) * width;
+        const y = height - ((f - minFps) / range) * height;
+        
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      
+      ctx.stroke();
+      
+      // Draw labels
+      ctx.fillStyle = '#9ad';
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${Math.round(maxFps)} fps`, 5, 15);
+      ctx.fillText(`${Math.round(minFps)} fps`, 5, height - 5);
+    }
+
+    getModeDisplayName(mode) {
+      const names = {
+        'superlow': 'Super Low', 'low': 'Low', 'high': 'High',
+        'superhigh': 'Super High', 'skull': 'Extreme',
+        'skullfire': 'Maximum', 'death': 'Insta-Death',
+        'death2': 'Double-Death', 'death3': 'Quad-Death'
+      };
+      return names[mode] || mode;
+    }
+
+    formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    exportJSON() {
+      const data = {
+        timestamp: new Date().toISOString(),
+        config: this.currentConfig,
+        results: this.results,
+        userAgent: navigator.userAgent,
+        device: {
+          screen: `${screen.width}x${screen.height}`,
+          devicePixelRatio: window.devicePixelRatio,
+          hardwareConcurrency: navigator.hardwareConcurrency
+        }
+      };
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gpu-benchmark-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    exportCSV() {
+      let csv = 'Mode,Avg FPS,Min FPS,Max FPS,P1% FPS,P99% FPS,Stability%,Frame Time (ms),Samples\n';
+      
+      this.results.forEach(result => {
+        csv += `${result.mode},${result.avgFps},${result.minFps},${result.maxFps},${result.p1Fps},${result.p99Fps},${result.stability},${result.avgFrameTime},${result.samples}\n`;
+      });
+      
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gpu-benchmark-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    shareResults() {
+      const summary = this.results.map(r => 
+        `${this.getModeDisplayName(r.mode)}: ${r.avgFps} fps (${r.stability}% stable)`
+      ).join('\n');
+      
+      const shareText = `GPU Orb Benchmark Results:\n\n${summary}\n\nDevice: ${navigator.userAgent.split(' ').slice(-2).join(' ')}\nDate: ${new Date().toLocaleDateString()}`;
+      
+      if (navigator.share) {
+        navigator.share({
+          title: 'GPU Orb Benchmark Results',
+          text: shareText
+        });
+      } else {
+        navigator.clipboard.writeText(shareText).then(() => {
+          alert('Results copied to clipboard!');
+        });
+      }
+    }
+  }
+
+  // Initialize benchmark system
+  const benchmark = new AdvancedBenchmark();
+
+  // HUD visibility
+  let hudVisible = false;
+  function toggleHUD(){
+    hudVisible = !hudVisible;
+    hudEl.classList.toggle('visible', hudVisible);
+  }
+  window.toggleHUD = toggleHUD;
+
+  // Close HUD when clicking outside
+  document.addEventListener('click', function(e) {
+    if (hudVisible && !hudEl.contains(e.target) && e.target.id !== 'toggle-btn') {
+      toggleHUD();
+    }
+  });
+
+  // Keyboard events
+  document.addEventListener('keydown', (e) => {
+    if(e.key.toLowerCase() === 'h') toggleHUD();
+  });
+
+  // Mode management
+  let mode = 'superlow';
+  function setMode(m){
+    mode = m;
+    const modeNames = {
+      'superlow': '🟢 Super Low', 'low': '🟡 Low', 'high': '🟠 High',
+      'superhigh': '🔴 Super High', 'skull': '☠️ Extreme (2048)',
+      'skullfire': '☠️🔥 MAXIMUM (4096)', 'death': '☠️💀 INSTA-DEATH (8192)',
+      'death2': '☠️💀🔥 DOUBLE-DEATH (16384)', 'death3': '☠️💀☠️ QUAD-DEATH (32768)'
+    };
+    modeEl.textContent = modeNames[m];
+    compEl.textContent = COMPLEX[m] + ' iterations';
+    
+    // Update buttons
+    ['bSL', 'bL', 'bH', 'bSH', 'bS', 'bSF', 'bDeath', 'bDeath2', 'bDeath3'].forEach(id => {
+      document.getElementById(id).classList.remove('active');
+    });
+    
+    const modeMap = {
+      'superlow': 'bSL', 'low': 'bL', 'high': 'bH', 'superhigh': 'bSH',
+      'skull': 'bS', 'skullfire': 'bSF', 'death': 'bDeath',
+      'death2': 'bDeath2', 'death3': 'bDeath3'
+    };
+    
+    if (modeMap[m]) document.getElementById(modeMap[m]).classList.add('active');
+    
+    // Show warnings for dangerous modes
+    const warnings = {
+      'skull': "⚠️ EXTREME MODE — May cause severe performance drops, browser hangs, or crashes. Desktop with cooling recommended.",
+      'skullfire': "🚨 MAXIMUM DANGER — Extreme GPU stress test. Expect major slowdowns, crashes, or device overheating. Use at your own risk!",
+      'death': "☠️💀 INSTA-DEATH MODE — Critical GPU stress level! Very high risk of browser crashes, system instability, or hardware damage. Use ONLY on dedicated test systems!",
+      'death2': "☠️💀🔥 DOUBLE-DEATH MODE — EXTREME GPU stress! This will likely crash most systems and may cause hardware damage. USE AT YOUR OWN RISK!",
+      'death3': "☠️💀☠️ QUAD-DEATH MODE — MAXIMUM THEORETICAL STRESS! This will almost certainly crash your browser and may cause system instability. USE EXTREME CAUTION!"
+    };
+    
+    if (warnings[m]) {
+      warningEl.textContent = warnings[m];
+      warningEl.style.display = 'block';
+    } else {
+      warningEl.style.display = 'none';
+    }
+    
+    resize();
+  }
+
+  // Manual mode buttons
+  document.getElementById('bSL').onclick = () => setMode('superlow');
+  document.getElementById('bL').onclick = () => setMode('low');
+  document.getElementById('bH').onclick = () => setMode('high');
+  document.getElementById('bSH').onclick = () => setMode('superhigh');
+  document.getElementById('bS').onclick = () => setMode('skull');
+  document.getElementById('bSF').onclick = () => setMode('skullfire');
+  document.getElementById('bDeath').onclick = () => setMode('death');
+  document.getElementById('bDeath2').onclick = () => setMode('death2');
+  document.getElementById('bDeath3').onclick = () => setMode('death3');
+
+  // Benchmark preset buttons
+  document.getElementById('quick-bench').onclick = () => {
+    benchmark.runBenchmark({
+      modes: ['superlow', 'low', 'high', 'superhigh'],
+      testDuration: 8,
+      warmupTime: 2,
+      sampleRate: 10,
+      stabilityTest: true
+    });
+  };
+
+  document.getElementById('standard-bench').onclick = () => {
+    benchmark.runBenchmark({
+      modes: ['superlow', 'low', 'high', 'superhigh', 'skull'],
+      testDuration: 15,
+      warmupTime: 3,
+      sampleRate: 10,
+      stabilityTest: true
+    });
+  };
+
+  document.getElementById('extended-bench').onclick = () => {
+    benchmark.runBenchmark({
+      modes: ['superlow', 'low', 'high', 'superhigh', 'skull', 'skullfire'],
+      testDuration: 30,
+      warmupTime: 5,
+      sampleRate: 5,
+      stabilityTest: true
+    });
+  };
+
+  document.getElementById('custom-bench').onclick = () => {
+    customSettings.style.display = customSettings.style.display === 'none' ? 'block' : 'none';
+  };
+
+  document.getElementById('start-custom-bench').onclick = () => {
+    const modes = Array.from(document.getElementById('include-modes').selectedOptions).map(o => o.value);
+    
+    benchmark.runBenchmark({
+      modes: modes,
+      testDuration: parseInt(document.getElementById('test-duration').value),
+      warmupTime: parseInt(document.getElementById('warmup-time').value),
+      sampleRate: parseInt(document.getElementById('sample-rate').value),
+      stabilityTest: document.getElementById('stability-test').value === 'true'
+    });
+    
+    customSettings.style.display = 'none';
+  };
+
+  // Export buttons
+  document.getElementById('export-json').onclick = () => benchmark.exportJSON();
+  document.getElementById('export-csv').onclick = () => benchmark.exportCSV();
+  document.getElementById('share-results').onclick = () => benchmark.shareResults();
+
+  setMode('superlow');
+
+  // Controls (orbit)
+  let yaw = 0.25, pitch = 0.1, zoom = 0.25;
+  let dragging = false, lx = 0, ly = 0;
+  
+  canvas.addEventListener('pointerdown', e => {
+    dragging = true; lx = e.clientX; ly = e.clientY;
+    canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+  });
+  
+  canvas.addEventListener('pointerup', e => {
+    dragging = false;
+    canvas.releasePointerCapture && canvas.releasePointerCapture(e.pointerId);
+  });
+  
+  canvas.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = (e.clientX - lx) / canvas.clientWidth;
+    const dy = (e.clientY - ly) / canvas.clientHeight;
+    yaw += dx * 2.8; pitch += dy * 1.8;
+    pitch = Math.max(-1.25, Math.min(1.25, pitch));
+    lx = e.clientX; ly = e.clientY;
+  });
+  
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoom = Math.max(0.0, Math.min(1.0, zoom + Math.sign(e.deltaY) * 0.04));
+  }, {passive: false});
+
+  // Touch pinch
+  let tdist = 0;
+  canvas.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const d = Math.hypot(dx, dy);
+      if (tdist > 0) zoom = Math.max(0.0, Math.min(1.0, zoom + (tdist - d) / 600.0));
+      tdist = d;
+    }
+  }, {passive: false});
+  
+  canvas.addEventListener('touchend', () => { tdist = 0; });
+
+  // Resize
+  function resize(){
+    const w = Math.max(640, Math.floor(window.innerWidth * (window.devicePixelRatio || 1)));
+    const h = Math.max(480, Math.floor(window.innerHeight * (window.devicePixelRatio || 1)));
+    canvas.width = w; canvas.height = h;
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.uniform2f(uRes, canvas.width, canvas.height);
+  }
+  
+  window.addEventListener('resize', resize);
+  resize();
+
+  // FPS tracking
+  let lastFPSTime = performance.now(), frames = 0, lastFrameTime = performance.now();
+  
+  function updateFPS(now){
+    frames++;
+    const currentFrameTime = now - lastFrameTime;
+    lastFrameTime = now;
+    
+    // Collect benchmark data
+    if (benchmark.isRunning) {
+      const fps = 1000 / Math.max(currentFrameTime, 1);
+      benchmark.collectFrameData(fps, currentFrameTime);
+    }
+    
+    if (now - lastFPSTime >= 500) {
+      const fps = Math.round(frames * 1000 / (now - lastFPSTime));
+      fpsEl.textContent = fps + ' fps';
+      
+      // Adaptive color
+      if (fps >= 50) fpsEl.style.color = '#00ff88';
+      else if (fps >= 30) fpsEl.style.color = '#ffaa00';
+      else if (fps >= 15) fpsEl.style.color = '#ff6600';
+      else fpsEl.style.color = '#ff3333';
+      
+      frames = 0;
+      lastFPSTime = now;
+    }
+  }
+
+  // Render loop
+  const t0 = performance.now();
+  function frame(){
+    const now = performance.now();
+    const t = (now - t0) * 0.001;
+    gl.uniform1f(uTime, t);
+    gl.uniform2f(uMouse, yaw, pitch);
+    gl.uniform1f(uZoom, zoom);
+    gl.uniform1i(uComplex, COMPLEX[mode]);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    updateFPS(now);
+    requestAnimationFrame(frame);
+  }
+  
+  requestAnimationFrame(frame);
+  console.log('Advanced GPU Benchmark loaded — default mode = superlow.');
+})();
+</script>
+</body>
+</html>
